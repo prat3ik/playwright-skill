@@ -23,7 +23,7 @@ A `data-testid` is a **public API for your UI's automation layer**: once a test 
 ## Golden Rules
 
 1. **Semantic HTML first** — give elements a real role/label/accessible name so `getByRole`/`getByLabel` work; then add test IDs.
-2. **Add `data-testid` deliberately**, not everywhere — on action targets, no-role custom widgets, scope containers, and dynamic/async regions.
+2. **Add `data-testid` only where role, label and text fall short** — no-role custom widgets, scope containers, list rows, and dynamic or localized regions. A control `getByRole` already finds uniquely needs none.
 3. **Name for global uniqueness** — `feature-component-element[-variant]`, `kebab-case`.
 4. **In lists, suffix with a stable domain key, never the array index** — `user-row-${user.id}` ✅ / `user-row-${index}` ❌.
 5. **Decouple the value from text, locale, styling, and DOM position** — those change; the test ID must not.

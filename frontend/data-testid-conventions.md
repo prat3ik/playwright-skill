@@ -9,7 +9,7 @@ A `data-testid` is a **public API for your UI's automation layer**. Once a test 
 ## TL;DR
 
 1. **Semantic HTML first.** Before adding a test ID, give the element a real role, label, or accessible name. An accessible button is locatable *and* usable by screen readers. (See [Locator priority](#locator-priority-build-this-in-order).)
-2. **Add `data-testid` deliberately**, not everywhere — interactive controls, dynamic/async regions, list rows, and custom components with no semantic role. (See [When to add](#when-to-add-a-data-testid).)
+2. **Add `data-testid` only where role, label and text fall short** — custom components with no semantic role, scope containers, list rows, and dynamic, localized or async regions. A control `getByRole` already finds uniquely needs none. (See [When to add](#when-to-add-a-data-testid).)
 3. **Name for global uniqueness**: `kebab-case`, namespaced by feature/component: `feature-component-element[-variant]`. (See [Naming convention](#naming-convention).)
 4. **In lists, suffix with a stable domain ID — never the array index.** `user-row-${user.id}` ✅ / `user-row-${index}` ❌. (See [Uniqueness in lists](#uniqueness-in-lists-and-loops).)
 5. **Never tie the value to text, locale, copy, styling, or DOM position.** (See [Stability rules](#stability-rules).)
@@ -19,21 +19,21 @@ A `data-testid` is a **public API for your UI's automation layer**. Once a test 
 
 ## Locator priority (build this in order)
 
-Playwright officially recommends locating elements in this order (most → least preferred). As the **author of the markup**, your goal is to make the *higher* tiers possible, and only fall to `data-testid` when they genuinely don't fit.
+Locate elements in this order (most → least preferred), the same order [core/locator-strategy.md](../core/locator-strategy.md) uses. Playwright itself recommends role locators first and CSS/XPath last. As the **author of the markup**, your goal is to make the *higher* tiers possible, and only fall to `data-testid` when they genuinely don't fit.
 
 | Priority | Strategy | What you provide in markup | Notes |
 |---|---|---|---|
-| 1 | **Role + accessible name** | semantic element (`<button>`, `<a href>`, `<nav>`, `<h1>`) or `role=` + `aria-label` | "Closest to how users and assistive tech perceive the page." Preferred for all interactive elements. |
+| 1 | **Role + accessible name** | semantic element (`<button>`, `<a href>`, `<nav>`, `<h1>`) or `role=` + `aria-label` | Playwright: "the closest way to how users and assistive technology perceive the page". Preferred for all interactive elements. |
 | 2 | **Label** | `<label for>` / wrapping `<label>` / `aria-labelledby` on form fields | Also makes the field accessible. |
 | 3 | **Placeholder** | `placeholder=""` | Yellow flag — placeholders disappear on input; prefer a label. |
 | 4 | **Text** | visible text content | For static, non-interactive content. Fragile under i18n. |
 | 5 | **Alt / Title** | `alt=""` on images, `title=""` | |
-| 6 | **Test ID** | `data-testid="..."` | **"The most resilient way of testing — even if text or role changes, the test still passes."** But it is **not user-facing**. |
-| 7 | **CSS / XPath** | — | **Not recommended. Never design for this.** "The DOM can often change leading to non-resilient tests." |
+| 6 | **Test ID** | `data-testid="..."` | Playwright: "the most resilient way of testing as even if your text or role of the attribute changes, the test will still pass." But it is **not user-facing**. |
+| 7 | **CSS / XPath** | — | **Never design for this.** Playwright: "CSS and XPath are not recommended as the DOM can often change leading to non resilient tests." |
 
-> Playwright's own caution, quoted: *"Testing by test ids is not user facing. If the role or text value is important to you then consider using user-facing locators."*
+> Playwright's own caution, quoted: *"However testing by test ids is not user facing. If the role or text value is important to you then consider using user facing locators such as role and text locators."*
 
-**The mental model for an engineer:** a `data-testid` is the **most stable** anchor (it survives copy changes, redesigns, role changes), which is exactly why it's the right tool for automation/AI agents. But stability is not a license to skip accessibility. **Do both:** semantic, accessible markup *and* a deliberate test ID where automation needs a durable handle.
+**The mental model for an engineer:** a `data-testid` is the **most stable** anchor (it survives copy changes, redesigns, role changes), which is why it's the right tool where role and text cannot give a unique, stable handle. It is not the default: when `getByRole` finds an element uniquely, tests should use that and the markup needs no test ID. Stability is also not a license to skip accessibility.
 
 ---
 
@@ -41,7 +41,7 @@ Playwright officially recommends locating elements in this order (most → least
 
 Add one when **at least one** of these is true:
 
-- **It's an interactive control a test/agent will act on** — buttons, links, inputs, toggles, menu items, tabs. (Even though `getByRole` may work, an explicit ID is the durable contract for the elements your flows depend on most.)
+- **It's a control whose role and name are not unique or stable** — several identical "Edit" buttons with no container to scope into, or an icon button whose accessible name is localized.
 - **It has no usable semantic role** — custom `<div>`/`<span>` widgets, canvas/SVG charts, drag handles, third-party-wrapped components, design-system primitives.
 - **It's a region/container you need to scope into** — a modal, a card, a table, a toast container, a specific list row. Scoping locators (`getByTestId('cart-summary').getByRole('button', { name: 'Checkout' })`) is one of the highest-value uses.
 - **Its text/role is dynamic or localized** — status badges, i18n strings, time/relative dates — where text-based locators would be flaky.
@@ -52,7 +52,7 @@ Add one when **at least one** of these is true:
 - **Decorative / layout-only elements** — wrappers, spacers, purely presentational `<div>`s nothing interacts with.
 - **Every single element.** Test-ID soup is noise; it bloats markup and signals nothing. Add IDs at the elements automation actually targets, plus the containers used to scope them.
 - **As a substitute for accessibility.** If you're tempted to add `data-testid` to a `<div onClick>`, first convert it to a `<button>` (or add `role`/`aria-label`). You get a better app *and* a `getByRole` locator for free.
-- **On something already trivially locatable by a unique role + name** that will never change — though adding the ID anyway is cheap insurance for critical-path elements.
+- **On something already locatable by a unique role + name.** Tests should use `getByRole` there; see [core/locator-strategy.md](../core/locator-strategy.md).
 
 ---
 
@@ -117,6 +117,18 @@ Now an agent can target one exact row: `getByTestId('user-row-42-delete-button')
 - If the data genuinely has no stable key, the ID on the *container* plus a semantic locator inside (`.filter({ hasText })`) is better than an index-based test ID.
 - **Never** use `Math.random()` or a render-time counter — the value must be deterministic across renders and across test runs.
 
+### Selecting the whole collection
+
+Unique row IDs leave no shared handle for "all rows", for example to assert a count. A prefix does not work either: `/^user-row-/` also matches `user-row-42-name` and `user-row-42-delete-button`. Use one of these instead of a second, non-unique attribute (such as `data-testclass`), which `getByTestId()` cannot read and would push tests back to CSS selectors:
+
+```ts
+// Container test ID + role inside it (preferred)
+await expect(page.getByTestId('users-table').getByRole('row')).toHaveCount(5);
+
+// Or an anchored pattern that matches row IDs only
+await expect(page.getByTestId(/^user-row-\d+$/)).toHaveCount(5);
+```
+
 ---
 
 ## Stability rules
@@ -167,7 +179,7 @@ await row.getByRole('button', { name: 'Delete' }).click();
 Use this when writing or reviewing a component:
 
 - [ ] Interactive elements use **semantic HTML / ARIA** first (so `getByRole`/`getByLabel` work).
-- [ ] `data-testid` added to: controls acted on, no-role custom widgets, scope containers, dynamic/async regions.
+- [ ] `data-testid` added only where role/label/text fall short: no-role custom widgets, scope containers, list rows, dynamic or localized regions.
 - [ ] No `data-testid` on purely decorative/layout nodes.
 - [ ] Every value follows `feature-component-element[-variant]` in `kebab-case`.
 - [ ] List/loop IDs use a **stable domain key**, not the array index.
@@ -183,13 +195,13 @@ Use this when writing or reviewing a component:
 | Don't | Why it breaks | Do instead |
 |---|---|---|
 | `data-testid="btn"` on 12 buttons | Not unique → strict-mode violations / wrong match | Namespace: `checkout-pay-button`, `cart-clear-button` |
-| `data-testid={`row-${index}`}` | Reorders/paginates → IDs shift | `row-${item.id}` |
+| ``data-testid={`row-${index}`}`` | Reorders/paginates → IDs shift | `row-${item.id}` |
 | `data-testid="blue-large-cta"` | Tied to styling → renamed on redesign | `signup-cta-button` |
 | `data-testid={t('submit')}` | Tied to locale → breaks per language | `submit-button` (constant) |
 | `<div onClick={...} data-testid="save">` | Skips accessibility; not keyboard-usable | `<button data-testid="save">` → also `getByRole('button')` |
-| `data-testid` on every `<div>` | Markup noise, no signal, perf/bundle cost | Add only at action targets + scope containers |
+| `data-testid` on every `<div>` | Markup noise, no signal, perf/bundle cost | Add only at no-role widgets, scope containers and list rows |
 | Mixing `data-test`, `data-qa`, `data-testid` | `getByTestId` reads only one attribute | Standardize on `data-testid` |
-| `data-testid={`id-${Math.random()}`}` | Non-deterministic across renders/runs | Use a stable entity key |
+| ``data-testid={`id-${Math.random()}`}`` | Non-deterministic across renders/runs | Use a stable entity key |
 | Stripping `data-testid` in the tested env | Deletes the locators you built | Strip only in true production, keep in CI/staging |
 
 ---

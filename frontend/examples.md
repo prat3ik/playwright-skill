@@ -49,16 +49,15 @@ function UserTable({ users }) {
 }
 ```
 
-Custom no-role widget — add ARIA *and* a test ID:
+Toggle swatch — a native `<button>` gives role, focus and Enter/Space for free; the test ID tells identical swatches apart by a stable key:
 
 ```jsx
 function ColorSwatch({ color, selected, onSelect }) {
   return (
-    <div
-      role="button"
+    <button
+      type="button"
       aria-pressed={selected}
       aria-label={`Select ${color}`}
-      tabIndex={0}
       data-testid={`color-swatch-${color}`}
       onClick={onSelect}
     />
@@ -96,7 +95,7 @@ function ColorSwatch({ color, selected, onSelect }) {
 
 ---
 
-## Angular
+## Angular (17+ control flow)
 
 ```html
 <form data-testid="login-form" (ngSubmit)="onSubmit()">
@@ -107,24 +106,35 @@ function ColorSwatch({ color, selected, onSelect }) {
 </form>
 
 <ul data-testid="users-list">
-  <li *ngFor="let user of users; trackBy: trackById"
-      [attr.data-testid]="'user-row-' + user.id">
-    {{ user.name }}
-    <button [attr.data-testid]="'user-row-' + user.id + '-delete-button'">
-      Delete
-    </button>
-  </li>
+  @for (user of users; track user.id) {
+    <li [attr.data-testid]="'user-row-' + user.id">
+      {{ user.name }}
+      <button [attr.data-testid]="'user-row-' + user.id + '-delete-button'">
+        Delete
+      </button>
+    </li>
+  }
 </ul>
 ```
 
-> Use `[attr.data-testid]="..."` for dynamic values (Angular needs `attr.` to bind to a real DOM attribute). Static values can stay as plain `data-testid="..."`. Pair `*ngFor` with a `trackBy` keyed on the same entity id.
+> Use `[attr.data-testid]="..."` for dynamic values (Angular needs `attr.` to bind to a real DOM attribute). Static values can stay as plain `data-testid="..."`. Key `@for` with `track` on the same entity id (on Angular 16 and older, `*ngFor` with a `trackBy` on that id).
 
 ---
 
-## Svelte
+## Svelte 5
 
 ```svelte
-<form data-testid="login-form" on:submit|preventDefault={onSubmit}>
+<script>
+  let { users, onSubmit } = $props();
+  let email = $state('');
+
+  function handleSubmit(event) {
+    event.preventDefault();
+    onSubmit({ email });
+  }
+</script>
+
+<form data-testid="login-form" onsubmit={handleSubmit}>
   <label for="email">Email</label>
   <input id="email" bind:value={email} data-testid="login-form-email-input" />
 
@@ -210,6 +220,29 @@ module.exports = {
 };
 ```
 
-Vue/Vite — strip via a build-time transform (e.g. a custom plugin or `@vue/compiler-sfc` node transform) gated on `mode === 'production'`. Verify your staging/CI build does **not** strip, or your suite will lose every locator.
+Vue/Vite — a template compiler node transform, enabled only in production mode:
+
+```js
+// vite.config.js
+import { defineConfig } from 'vite';
+import vue from '@vitejs/plugin-vue';
+
+const ELEMENT = 1, ATTRIBUTE = 6, DIRECTIVE = 7; // @vue/compiler-core NodeTypes
+
+function stripTestIds(node) {
+  if (node.type !== ELEMENT) return;
+  node.props = node.props.filter((p) =>
+    !(p.type === ATTRIBUTE && p.name === 'data-testid') &&
+    !(p.type === DIRECTIVE && p.name === 'bind' && p.arg?.content === 'data-testid'));
+}
+
+export default defineConfig(({ mode }) => ({
+  plugins: [
+    vue({ template: { compilerOptions: { nodeTransforms: mode === 'production' ? [stripTestIds] : [] } } }),
+  ],
+}));
+```
+
+Verify your staging/CI build does **not** strip, or your suite will lose every locator.
 
 > Decision guide: stripping reduces payload and hides internals, but adds build complexity and a foot-gun (stripping the wrong env breaks all tests). Many teams simply ship `data-testid` — it's a few bytes and harmless. Strip only when there's a concrete reason.
