@@ -142,6 +142,44 @@ test('payment integration', async ({ context, page }, testInfo) => {
 
 The attached HAR shows up alongside traces and screenshots in the HTML report and CI artifacts. See [core/network-mocking.md](../core/network-mocking.md#on-demand-har-recording-in-tracing-playwright-160) for the full API and `await using` cleanup.
 
+### Pattern 2d: Aria and Screen Snapshots in Traces (Playwright 1.63+)
+
+Traces recorded DOM snapshots only. 1.63 lets you choose which snapshot kinds are captured.
+
+```typescript
+export default defineConfig({
+  use: {
+    trace: {
+      mode: 'on',
+      snapshots: { dom: true, aria: true, screen: true }
+    },
+  },
+});
+```
+
+`aria` snapshots make a trace readable by an agent or a script without rendering the DOM, which is the difference between a human opening Trace Viewer and a bot diagnosing a failure in CI. `screen` captures rendered frames, which is the most expensive of the 3.
+
+**Turn `screen` off for routine CI capture.** With `trace: 'on-first-retry'` on a large suite, screen snapshots are the line item that pushes artifacts past upload limits. Keep `dom` and `aria`, add `screen` when investigating a specific visual failure.
+
+### Pattern 2e: Appending Reporters and New Reporter Options (Playwright 1.62 to 1.63)
+
+`--reporter` on the CLI **replaces** the configured reporter list, which silently drops a custom reporter you rely on. 1.63 adds an append form:
+
+```bash
+npx playwright test --add-reporter json
+```
+
+Use `--add-reporter` in any pipeline where the config already registers a reporter that must keep running — a quarantine reporter using `preprocess()`, for instance. See [core/dynamic-test-selection.md](../core/dynamic-test-selection.md).
+
+Other reporter changes worth knowing:
+
+| Feature | Version | What it does |
+|---|---|---|
+| `perfetto` reporter | 1.63 | Emits Trace Event Format, openable in Perfetto UI for timing analysis across a run |
+| `omitTags` option | 1.63 | Suppresses auto-appended tags in reporter output |
+| `mergeFiles` (HTML) | 1.62 | Groups test blocks in the HTML report: `reporter: [['html', { mergeFiles: true }]]` |
+| Duration waterfall | 1.63 | HTML report shows step durations as a waterfall alongside the step list |
+
 ### Pattern 3: Custom Reporter
 
 **Use when**: Built-in reporters don't meet your needs -- you want Slack notifications, database logging, or custom dashboards.
@@ -309,7 +347,26 @@ export default defineConfig({
 | `'off'` | Never | -- | None |
 | `'on'` | Every test | All | Very high |
 | `'on-first-retry'` | On retry | Retried tests | Low |
+| `'on-all-retries'` (1.61+) | On every retry | All retries | Low-medium |
 | `'retain-on-failure'` | Every test | Failed only | Medium |
+| `'retain-on-first-failure'` (1.61+) | First run of every test (not retries) | Failed first runs | Medium |
+| `'retain-on-failure-and-retries'` (1.61+) | Every run incl. retries | Failures + their retries | Medium |
+
+The 1.61 modes mirror the `trace` modes, so video and trace policies can finally match. `'retain-on-failure-and-retries'` is the best default for flaky-test hunting: you get video of both the original failure *and* the retry, so you can compare the two runs.
+
+**Video quality and styling (Playwright 1.64+)**: `video` accepts an object with `fps`, and action decorations are styled with plain CSS:
+
+```typescript
+use: {
+  video: {
+    mode: 'retain-on-failure',
+    size: { width: 1280, height: 720 },
+    fps: 15,             // lower fps for CI artifacts; 30 to 60 for demos
+  },
+},
+```
+
+Videos are now encoded with **VP9 instead of VP8**: less CPU and smaller files at the same or better quality, so existing `retain-on-failure` setups get cheaper with no config change. Firefox and WebKit currently capture up to 25 fps regardless of the setting. For demo-quality recordings with styled action callouts, see [screenshots-and-media.md](../playwright-cli/screenshots-and-media.md#annotated-screencasts).
 
 ### Pattern 6: Artifact Organization for CI
 

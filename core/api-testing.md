@@ -154,6 +154,38 @@ test('form-urlencoded body', async ({ request }) => {
 });
 ```
 
+### Typed Responses and Request Timing (Playwright 1.62 to 1.63)
+
+**Typed responses (1.63+)** — pass a type argument so the parsed body is typed at the call site instead of being cast afterwards:
+
+```javascript
+const response = await request.get<User>('/api/users/42');
+const user = await response.json(); // typed as User
+```
+
+This is a compile-time convenience only. The type argument does **not** validate the payload at runtime — a response that does not match `User` still parses without complaint and fails later, somewhere less obvious. For contract enforcement, keep a runtime schema check; see [Schema Validation](#schema-validation) below.
+
+**Resource timing (1.62+)** — `apiResponse.timing()` returns timing information for the request:
+
+```javascript
+const response = await request.get('/api/orders');
+const timing = response.timing();
+```
+
+Useful for catching a latency regression inside an existing API test rather than standing up a separate performance suite. Treat single-request numbers as noisy and assert on generous ceilings, not tight ranges, or you have traded a flaky UI test for a flaky timing test. See [core/performance-testing.md](performance-testing.md).
+
+### Managing Request Cookies (Playwright 1.64+)
+
+**Before 1.64**, cookies on an `APIRequestContext` could only be seeded through `storageState` at creation time or by hand-building `Cookie` headers. **1.64** adds `addCookies()`, `cookies()` and `clearCookies()`, mirroring the `BrowserContext` methods:
+
+```javascript
+await request.addCookies([{ name: 'session-id', value: '42', url: 'https://example.com' }]);
+console.log(await request.cookies('https://example.com'));
+await request.clearCookies({ name: 'session-id' });
+```
+
+Practical uses: assert that a login endpoint actually set the session cookie, test an expired-session path by clearing one cookie mid-test, or switch feature-flag cookies between calls without creating a new context.
+
 ### API Test Structure
 
 **Use when**: Writing dedicated API test suites that do not need a browser.
@@ -453,6 +485,12 @@ test('thorough response validation', async ({ request }) => {
   expect(response.headers()['content-type']).toContain('application/json');
   expect(response.headers()['x-request-id']).toBeDefined();
   expect(response.headers()['cache-control']).toMatch(/max-age=\d+/);
+
+  // TLS and connection details (Playwright 1.61+ — mirrors the browser-side APIs)
+  const security = await response.securityDetails();  // protocol, issuer, validity
+  expect(security?.protocol).toBe('TLS 1.3');
+  const addr = await response.serverAddr();           // { ipAddress, port } actually hit
+  expect(addr?.port).toBe(443);
 
   // Full body parse and deep assertion
   const user = await response.json();

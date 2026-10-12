@@ -58,6 +58,9 @@ export default defineConfig({
     trace: 'on-first-retry',          // full trace on first retry only
     screenshot: 'only-on-failure',     // screenshot on failure
     video: 'retain-on-failure',        // video only kept for failures
+    // 1.61+ adds video modes matching trace: 'on-all-retries',
+    // 'retain-on-first-failure', 'retain-on-failure-and-retries'
+    // 1.64+ accepts { mode, size, fps } and encodes VP9 instead of VP8
 
     // Sensible defaults
     locale: 'en-US',

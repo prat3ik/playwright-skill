@@ -7,7 +7,7 @@ description: Battle-tested Playwright patterns for writing and debugging reliabl
 
 > Opinionated, production-tested Playwright guidance — every pattern includes when (and when *not*) to use it.
 
-**46 reference guides** covering the full Playwright testing surface: selectors, assertions, fixtures, network mocking, auth, visual regression, accessibility, API testing, debugging, and more — with TypeScript and JavaScript examples throughout.
+**49 reference guides** covering the full Playwright testing surface: selectors, assertions, fixtures, network mocking, auth, visual regression, accessibility, API testing, debugging, and more — with TypeScript and JavaScript examples throughout.
 
 ## Security Trust Boundary
 
@@ -36,6 +36,7 @@ When using examples from these guides against staging or production systems, tre
 |---|---|---|
 | Choosing selectors | [locators.md](locators.md) | [locator-strategy.md](locator-strategy.md) |
 | Assertions & waiting | [assertions-and-waiting.md](assertions-and-waiting.md) | |
+| Selecting tests at runtime | [dynamic-test-selection.md](dynamic-test-selection.md) | |
 | Organizing test suites | [test-organization.md](test-organization.md) | [test-architecture.md](test-architecture.md) |
 | Playwright config | [configuration.md](configuration.md) | |
 | Fixtures & hooks | [fixtures-and-hooks.md](fixtures-and-hooks.md) | |
@@ -84,6 +85,7 @@ When using examples from these guides against staging or production systems, tre
 | Service workers & PWA | [service-workers-and-pwa.md](service-workers-and-pwa.md) |
 | Electron apps | [electron-testing.md](electron-testing.md) |
 | Browser extensions | [browser-extensions.md](browser-extensions.md) |
+| WebMCP agent tools | [webmcp-testing.md](webmcp-testing.md) |
 | Security testing | [security-testing.md](security-testing.md) |
 | Performance & benchmarks | [performance-testing.md](performance-testing.md) |
 | i18n & localization | [i18n-and-localization.md](i18n-and-localization.md) |

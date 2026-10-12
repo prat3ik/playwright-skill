@@ -24,6 +24,14 @@ npx playwright test --retries=3 --trace=on
 # Run in fully parallel mode to expose isolation issues
 npx playwright test --fully-parallel --workers=4
 
+# Run tests in a random order to expose order dependencies (1.64+)
+npx playwright test --shuffle
+# Reproduce a failing order with the seed printed at the start of the run
+npx playwright test --shuffle 271828182
+
+# Run all retries at the end in one worker to rule out concurrency (1.62+)
+npx playwright test --retries=2 --retry-strategy=isolated
+
 # List flaky tests (tests that failed then passed on retry)
 npx playwright test --retries=2 --reporter=json | jq '.suites[].specs[] | select(.ok == true and (.tests[].results | length > 1))'
 ```
@@ -376,6 +384,22 @@ const test = base.extend({
 module.exports = { test, expect };
 ```
 
+#### Expose Hidden Order Dependencies With `--shuffle` (Playwright 1.64+)
+
+**Before 1.64**, order dependencies hid behind the fixed scheduling order: test B only passed because test A always ran first in the same worker and left a row, a cookie, or a module-level variable behind. You found out when someone added a test, sharding changed, or a file was renamed.
+
+**1.64** adds `--shuffle`, which schedules tests in a random order and prints the seed:
+
+```bash
+npx playwright test --shuffle
+# Running 42 tests using 4 workers, shuffle seed 271828182
+
+# Same seed, same order: reproduce the failure deterministically
+npx playwright test --shuffle 271828182
+```
+
+**Practical use**: run a nightly CI job with `--shuffle` and keep the seed in the job log. A test that fails under shuffle but passes in the default order has an isolation bug; fix it with the patterns above rather than pinning the order. Do not put `--shuffle` on the PR pipeline until the suite is clean, or every PR inherits unrelated random failures.
+
 ### Fix: Environment Issues
 
 **Use when**: The test passes locally but fails in CI, or fails on certain operating systems, viewports, or machines.
@@ -696,6 +720,39 @@ jobs:
       - name: Report flaky test results
         run: node scripts/report-flaky-metrics.js
 ```
+
+#### Option 4: Quarantine From a Reporter (`reporter.preprocess()`, Playwright 1.62+)
+
+Options 1 to 3 all require editing the spec file, which means the quarantine list lives in source control and is updated by hand. Playwright 1.62 adds `reporter.preprocess()`, a hook that runs after collection and before execution, so the list can come from run history instead.
+
+```js
+class QuarantineReporter {
+  async preprocess({ config, suite, testRun }) {
+    for (const test of suite.allTests()) {
+      if (shouldSkip(test))
+        testRun.skip(test);
+    }
+  }
+}
+```
+
+`testRun` marks a test as `skip`, `exclude`, `fixed`, or `failing`. Prefer `failing` over `skip` for quarantine: the test still runs, red is expected, and the run fails when it unexpectedly passes — so a recovered test removes itself from the list instead of sitting there forever.
+
+Driving this from an external flakiness API, matching on full title paths, and the exemption guard that stops auto-quarantine from silencing your most critical test are covered in [core/dynamic-test-selection.md](dynamic-test-selection.md).
+
+#### Isolated Retries (`retryStrategy: 'isolated'`, Playwright 1.62+)
+
+The default retry runs immediately in the same worker, inheriting whatever state may have caused the failure. `'isolated'` defers every retry to the end of the run and executes them in a single worker.
+
+```typescript
+// playwright.config.ts
+export default defineConfig({
+  retries: 2,
+  retryStrategy: 'isolated',
+});
+```
+
+This is a diagnostic, not a fix. A test that fails in the parallel run and passes on isolated retry is telling you the failure is concurrency-related rather than inherent — which points at [Fix: Test Isolation Issues](#fix-test-isolation-issues) above. Note the retry phase is serial, so a suite with many retrying tests pays real wall-clock time for the signal.
 
 ### Prevention Checklist
 
